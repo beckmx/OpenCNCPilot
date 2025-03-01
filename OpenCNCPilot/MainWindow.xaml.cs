@@ -11,12 +11,20 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
+using System.Windows.Media.Imaging;
+using System.Windows.Threading;
+
+using System.Drawing;
+using AForge.Video;
+using System.Configuration;
 
 namespace OpenCNCPilot
 {
 	public partial class MainWindow : Window, INotifyPropertyChanged
 	{
-		Machine machine = new Machine();
+        private MJPEGStream stream;
+
+        Machine machine = new Machine();
 
 		OpenFileDialog openFileDialogGCode = new OpenFileDialog() { Filter = Constants.FileFilterGCode };
 		SaveFileDialog saveFileDialogGCode = new SaveFileDialog() { Filter = Constants.FileFilterGCode };
@@ -42,7 +50,10 @@ namespace OpenCNCPilot
 			AppDomain.CurrentDomain.UnhandledException += UnhandledException;
 			InitializeComponent();
 
-			openFileDialogGCode.FileOk += OpenFileDialogGCode_FileOk;
+
+            UrlInput.Text = Properties.Settings.Default.StreamURL;
+            Console.WriteLine("Saved URL: " + Properties.Settings.Default.StreamURL);
+            openFileDialogGCode.FileOk += OpenFileDialogGCode_FileOk;
 			saveFileDialogGCode.FileOk += SaveFileDialogGCode_FileOk;
 			openFileDialogHeightMap.FileOk += OpenFileDialogHeightMap_FileOk;
 			saveFileDialogHeightMap.FileOk += SaveFileDialogHeightMap_FileOk;
@@ -97,8 +108,72 @@ namespace OpenCNCPilot
 				}
 			}
 		}
+        private void StartStream_Click(object sender, RoutedEventArgs e)
+        {
+            string url = UrlInput.Text.Trim();
+            if (string.IsNullOrEmpty(url))
+            {
+                MessageBox.Show("Please enter a valid MJPEG stream URL.");
+                return;
+            }
 
-		public Vector3 LastProbePosMachine { get; set; }
+            // Save URL for next time
+            Properties.Settings.Default.StreamURL = url;
+            Properties.Settings.Default.Save();
+
+            // Stop previous stream if running
+            StopStream();
+
+            // Start new stream
+            stream = new MJPEGStream(url);
+            stream.NewFrame += Stream_NewFrame;
+            stream.Start();
+        }
+
+        private void Stream_NewFrame(object sender, NewFrameEventArgs eventArgs)
+        {
+            try
+            {
+                using (MemoryStream memory = new MemoryStream())
+                {
+                    eventArgs.Frame.Save(memory, System.Drawing.Imaging.ImageFormat.Bmp);
+                    memory.Position = 0;
+
+                    BitmapImage bitmap = new BitmapImage();
+                    bitmap.BeginInit();
+                    bitmap.StreamSource = memory;
+                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                    bitmap.EndInit();
+                    bitmap.Freeze(); // Avoid cross-thread issues
+
+                    Dispatcher.Invoke(() => VideoStream.Source = bitmap);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error displaying MJPEG: " + ex.Message);
+            }
+        }
+      
+
+        private void StopStream()
+        {
+            if (stream != null)
+            {
+                stream.SignalToStop();
+                stream.WaitForStop();
+                stream = null;
+            }
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            base.OnClosed(e);
+            Console.WriteLine("Window is closing. Stopping stream...");
+            StopStream();
+            Environment.Exit(0); // Ensure all background threads terminate
+        }
+        public Vector3 LastProbePosMachine { get; set; }
 		public Vector3 LastProbePosWork { get; set; }
 
 		private void Machine_ProbeFinished_UserOutput(Vector3 position, bool success)

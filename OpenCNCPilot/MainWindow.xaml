@@ -300,13 +300,13 @@
                 </Border>
                 <Border Style="{StaticResource stylePanelOut}">
                     <Expander Header="About" IsExpanded="{util:SettingBinding AboutExpanderOpen}">
-                        <StackPanel>
-                            <TextBlock TextAlignment="Center" FontSize="14" Padding="5">
-								<Span FontWeight="Bold" FontSize="15">OpenCNCPilot <Run Text="{Binding Version, Mode=OneWay}"/> by martin2250</Span><LineBreak/>
-								<Hyperlink RequestNavigate="Hyperlink_RequestNavigate" NavigateUri="https://github.com/martin2250/OpenCNCPilot">Project Page</Hyperlink>
-								<Hyperlink RequestNavigate="Hyperlink_RequestNavigate" NavigateUri="https://github.com/martin2250/OpenCNCPilot/issues">Help</Hyperlink>
-                            </TextBlock>
+                        <StackPanel Margin="10">
+                            <TextBlock Text="MJPEG Stream URL:"/>
+                            <TextBox x:Name="UrlInput" Width="400" />
+                            <Button Content="Start Stream" Click="StartStream_Click" Margin="5"/>
+                            <Image x:Name="VideoStream" Width="640" Height="480"/>
                         </StackPanel>
+
                     </Expander>
                 </Border>
                 <Border Style="{StaticResource stylePanelOut}">
