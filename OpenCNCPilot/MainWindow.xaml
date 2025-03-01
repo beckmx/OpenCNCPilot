@@ -305,6 +305,9 @@
                             <TextBox x:Name="UrlInput" Width="400" />
                             <Button Content="Start Stream" Click="StartStream_Click" Margin="5"/>
                             <Image x:Name="VideoStream" Width="640" Height="480"/>
+                            <Button Content="Record Timelapse" Click="StartTimelapse_Click" />
+                            <Button Content="Stop Recording" Click="StopTimelapse_Click" />
+
                         </StackPanel>
 
                     </Expander>

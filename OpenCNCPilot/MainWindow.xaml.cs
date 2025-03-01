@@ -18,6 +18,9 @@ using System.Drawing;
 using AForge.Video;
 using System.Configuration;
 
+using System.Drawing.Imaging;
+using System.Diagnostics;
+
 namespace OpenCNCPilot
 {
 	public partial class MainWindow : Window, INotifyPropertyChanged
@@ -40,12 +43,79 @@ namespace OpenCNCPilot
 
 		public event PropertyChangedEventHandler PropertyChanged;
 
-		private void RaisePropertyChanged(string propertyName)
+        //timelapse variables
+        private DispatcherTimer timelapseTimer;
+        private List<string> imagePaths = new List<string>();
+        private string outputFolder = Path.Combine(Path.GetTempPath(), "Timelapse");
+        private bool isRecording = false;
+
+        private void RaisePropertyChanged(string propertyName)
 		{
 			PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 		}
 
-		public MainWindow()
+        private void StartTimelapse_Click(object sender, RoutedEventArgs e)
+        {
+            if (isRecording) return;
+            isRecording = true;
+            Directory.CreateDirectory(outputFolder);
+            imagePaths.Clear();
+
+            timelapseTimer = new DispatcherTimer();
+            timelapseTimer.Interval = TimeSpan.FromSeconds(5);
+            timelapseTimer.Tick += CaptureFrame;
+            timelapseTimer.Start();
+        }
+
+        private int frameCounter = 0; // Add this as a class-level variable
+
+        private void CaptureFrame(object sender, EventArgs e)
+        {
+            if (VideoStream.Source is BitmapImage bitmapImage)
+            {
+                string filePath = Path.Combine(outputFolder, $"frame_{frameCounter:D4}.jpg"); // Sequential naming
+                frameCounter++; // Increment the counter
+
+                using (FileStream fileStream = new FileStream(filePath, FileMode.Create))
+                {
+                    BitmapEncoder encoder = new JpegBitmapEncoder();
+                    encoder.Frames.Add(BitmapFrame.Create(bitmapImage));
+                    encoder.Save(fileStream);
+                }
+
+                imagePaths.Add(filePath);
+            }
+        }
+
+
+        private void StopTimelapse_Click(object sender, RoutedEventArgs e)
+        {
+            if (!isRecording) return;
+            isRecording = false;
+            timelapseTimer?.Stop();
+            string ffmpegPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "FFmpeg", "ffmpeg.exe");
+
+            // Generate video using FFmpeg
+            string videoPath = Path.Combine(outputFolder, "timelapse.mp4");
+            string ffmpegCommand = $"-framerate 10 -i \"{outputFolder}\\frame_%04d.jpg\" -c:v libx264 -r 30 \"{videoPath}\"";
+			Console.WriteLine(ffmpegPath);
+			Console.WriteLine(ffmpegCommand);
+
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = ffmpegPath,
+                Arguments = ffmpegCommand,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            });
+
+            MessageBox.Show($"Timelapse saved to: {videoPath}");
+        }
+
+        public MainWindow()
 		{
 			AppDomain.CurrentDomain.UnhandledException += UnhandledException;
 			InitializeComponent();
